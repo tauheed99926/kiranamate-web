@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 import authRoutes from './routes/auth';
 import shopRoutes from './routes/shop';
 import categoryRoutes from './routes/categories';
@@ -52,9 +54,19 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/backup', backupRoutes);
 
-// 404 Handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({ success: false, message: `Route ${req.method} ${req.url} not found.` });
+// Static Client Serving (for unified full-stack deployment)
+const clientDist = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.url.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
+// 404 Handler for API
+app.use('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: `API route ${req.method} ${req.url} not found.` });
 });
 
 // Global Centralized Error Handler
