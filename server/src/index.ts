@@ -22,22 +22,28 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// CORS configuration (supports configurable frontend origin or permissive for mobile scanners)
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : '*';
+
 app.use(cors({
-  origin: '*', // Allow frontend dev server and network mobile devices
+  origin: allowedOrigins === '*' ? true : allowedOrigins,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health Check
-app.get('/api/health', (req: Request, res: Response) => {
+// Health Check (Supports both /health and /api/health for Render and monitoring)
+const healthHandler = (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     app: 'KiranaMate Backend API',
     time: new Date().toISOString(),
   });
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Mount Routes
 app.use('/api/auth', authRoutes);
