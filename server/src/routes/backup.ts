@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
+import { prisma } from '../db';
 
 const router = Router();
 router.use(requireAuth);
@@ -24,8 +25,34 @@ if (!fs.existsSync(uploadsDir)) {
 const upload = multer({ dest: uploadsDir });
 
 // Download backup copy of database
-router.get('/download', (req: Request, res: Response) => {
+router.get('/download', async (req: Request, res: Response) => {
   try {
+    const isPostgres = process.env.DATABASE_URL?.startsWith('postgres');
+
+    if (isPostgres) {
+      const shopId = req.user!.shopId;
+      const [shop, categories, products, customers, suppliers, sales] = await Promise.all([
+        prisma.shop.findUnique({ where: { id: shopId }, include: { settings: true } }),
+        prisma.category.findMany({ where: { shopId } }),
+        prisma.product.findMany({ where: { shopId } }),
+        prisma.customer.findMany({ where: { shopId } }),
+        prisma.supplier.findMany({ where: { shopId } }),
+        prisma.sale.findMany({ where: { shopId }, include: { items: true, payments: true } }),
+      ]);
+
+      const backupData = {
+        app: 'KiranaMate',
+        exportDate: new Date().toISOString(),
+        engine: 'postgresql',
+        data: { shop, categories, products, customers, suppliers, sales },
+      };
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="kiranamate-backup-${timestamp}.json"`);
+      return res.send(JSON.stringify(backupData, null, 2));
+    }
+
     const dbPath = getDbPath();
     if (!fs.existsSync(dbPath)) {
       return res.status(404).json({ success: false, message: 'Database file not found.' });
@@ -44,9 +71,18 @@ router.get('/download', (req: Request, res: Response) => {
   }
 });
 
-// Restore database safely from uploaded SQLite file
+// Restore database safely from uploaded file
 router.post('/restore', upload.single('dbFile'), async (req: Request, res: Response) => {
   try {
+    const isPostgres = process.env.DATABASE_URL?.startsWith('postgres');
+    if (isPostgres) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        message: 'Direct SQLite binary restore is disabled when using PostgreSQL. To migrate your local SQLite data to PostgreSQL, run: npm run db:transfer-to-postgres',
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }

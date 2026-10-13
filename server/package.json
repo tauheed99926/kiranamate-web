@@ -8,8 +8,13 @@
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
+    "prisma:generate:sqlite": "prisma generate --schema=prisma/schema.sqlite.prisma",
     "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
+    "use:sqlite": "prisma generate --schema=prisma/schema.sqlite.prisma",
+    "use:postgres": "prisma generate --schema=prisma/schema.prisma",
+    "db:transfer-to-postgres": "tsx src/scripts/migrate-to-postgres.ts",
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {

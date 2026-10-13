@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../db';
+import { prisma, containsFilter } from '../db';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -24,9 +24,9 @@ router.get('/', async (req: Request, res: Response) => {
     if (search && String(search).trim()) {
       const q = String(search).trim();
       where.OR = [
-        { invoiceNumber: { contains: q } },
-        { customerName: { contains: q } },
-        { customerPhone: { contains: q } },
+        { invoiceNumber: containsFilter(q) },
+        { customerName: containsFilter(q) },
+        { customerPhone: containsFilter(q) },
       ];
     }
 

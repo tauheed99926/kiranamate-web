@@ -1,0 +1,258 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Shop {
+  id            String         @id @default(uuid())
+  name          String
+  ownerName     String
+  phone         String
+  address       String?
+  gstin         String?
+  logoUrl       String?
+  currency      String         @default("INR")
+  invoicePrefix String         @default("INV-")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  settings      ShopSetting?
+  users         User[]
+  categories    Category[]
+  products      Product[]
+  customers     Customer[]
+  suppliers     Supplier[]
+  sales         Sale[]
+  purchases     Purchase[]
+  returns       Return[]
+  stockMovements StockMovement[]
+}
+
+model ShopSetting {
+  id                 String   @id @default(uuid())
+  shopId             String   @unique
+  shop               Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  taxEnabled         Boolean  @default(true)
+  defaultGstRate     Float    @default(0.0) // 0%, 5%, 12%, 18%, 28%
+  taxInclusive       Boolean  @default(true)
+  allowNegativeStock Boolean  @default(false)
+  lowStockDefault    Float    @default(5.0)
+  thermalPrinterWidth String  @default("80mm") // 80mm or 58mm
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  username     String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("OWNER") // OWNER or STAFF
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  shopId      String
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@unique([shopId, name])
+}
+
+model Product {
+  id                String          @id @default(uuid())
+  shopId            String
+  shop              Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  categoryId        String
+  category          Category        @relation(fields: [categoryId], references: [id])
+  name              String
+  barcode           String?
+  sku               String?
+  brand             String?
+  purchaseCost      Float           @default(0.0) // wholesale/cost price in INR
+  sellingPrice      Float           // retail selling price in INR
+  mrp               Float?          // Maximum Retail Price
+  stockQuantity     Float           @default(0.0) // supports decimal quantities like 1.5 kg
+  lowStockThreshold Float           @default(5.0)
+  unit              String          @default("piece") // piece, kg, gm, litre, ml, packet, box
+  supplierId        String?
+  supplier          Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  expiryDate        DateTime?
+  description       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  stockMovements    StockMovement[]
+  saleItems         SaleItem[]
+  purchaseItems     PurchaseItem[]
+  returnItems       ReturnItem[]
+
+  @@index([shopId, barcode])
+  @@index([shopId, name])
+}
+
+model StockMovement {
+  id             String   @id @default(uuid())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type           String   // PURCHASE, SALE, ADJUSTMENT, RETURN, DAMAGE
+  quantityChange Float    // +ve or -ve
+  previousStock  Float
+  newStock       Float
+  reason         String?
+  referenceId    String?  // saleId or purchaseId or null
+  createdAt      DateTime @default(now())
+}
+
+model Customer {
+  id               String    @id @default(uuid())
+  shopId           String
+  shop             Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name             String
+  phone            String
+  email            String?
+  address          String?
+  totalSpent       Float     @default(0.0)
+  visitCount       Int       @default(0)
+  lastPurchaseDate DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sales            Sale[]
+
+  @@unique([shopId, phone])
+}
+
+model Supplier {
+  id        String     @id @default(uuid())
+  shopId    String
+  shop      Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  email     String?
+  address   String?
+  gstin     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  products  Product[]
+  purchases Purchase[]
+}
+
+model Purchase {
+  id            String         @id @default(uuid())
+  shopId        String
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  supplierId    String?
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  invoiceNumber String
+  totalAmount   Float
+  notes         String?
+  purchaseDate  DateTime       @default(now())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  items         PurchaseItem[]
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Float
+  unitCost   Float
+  total      Float
+}
+
+model Sale {
+  id            String      @id @default(uuid())
+  shopId        String
+  shop          Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  invoiceNumber String      @unique
+  customerId    String?
+  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName  String?
+  customerPhone String?
+  subtotal      Float
+  discountTotal Float       @default(0.0)
+  taxTotal      Float       @default(0.0)
+  grandTotal    Float
+  paymentMethod String      @default("CASH") // CASH, UPI, CARD, SPLIT
+  paymentStatus String      @default("PAID") // PAID, PARTIAL, REFUNDED, CANCELLED
+  cashTendered  Float?
+  changeGiven   Float?
+  notes         String?
+  status        String      @default("COMPLETED") // COMPLETED, CANCELLED, RETURNED
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  items         SaleItem[]
+  payments      Payment[]
+  returns       Return[]
+}
+
+model SaleItem {
+  id          String   @id @default(uuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  productName String
+  barcode     String?
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0.0)
+  taxRate     Float    @default(0.0)
+  lineTotal   Float
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  saleId         String
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  paymentMethod  String   // CASH, UPI, CARD
+  amount         Float
+  transactionRef String?
+  createdAt      DateTime @default(now())
+}
+
+model Return {
+  id           String       @id @default(uuid())
+  shopId       String
+  shop         Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  saleId       String
+  sale         Sale         @relation(fields: [saleId], references: [id])
+  reason       String?
+  refundAmount Float
+  returnDate   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+
+  items        ReturnItem[]
+}
+
+model ReturnItem {
+  id          String   @id @default(uuid())
+  returnId    String
+  return      Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Float
+  refundPrice Float
+}
