@@ -7,12 +7,26 @@ import { requireAuth } from '../middleware/auth';
 const router = Router();
 router.use(requireAuth);
 
-const dbPath = path.resolve(__dirname, '../../data/kiranamate.db');
-const upload = multer({ dest: path.resolve(__dirname, '../../data/uploads/') });
+function getDbPath(): string {
+  const candidates = [
+    path.resolve(__dirname, '../../prisma/data/kiranamate.db'),
+    path.resolve(__dirname, '../../data/kiranamate.db'),
+    path.resolve(process.cwd(), 'prisma/data/kiranamate.db'),
+    path.resolve(process.cwd(), 'data/kiranamate.db'),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || candidates[0];
+}
+
+const uploadsDir = path.resolve(__dirname, '../../data/uploads/');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const upload = multer({ dest: uploadsDir });
 
 // Download backup copy of database
 router.get('/download', (req: Request, res: Response) => {
   try {
+    const dbPath = getDbPath();
     if (!fs.existsSync(dbPath)) {
       return res.status(404).json({ success: false, message: 'Database file not found.' });
     }
@@ -54,10 +68,12 @@ router.post('/restore', upload.single('dbFile'), async (req: Request, res: Respo
       });
     }
 
+    const dbPath = getDbPath();
+
     // Create automatic safety backup of current database before restoring
     if (fs.existsSync(dbPath)) {
       const backupTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const safetyBackupPath = path.resolve(__dirname, `../../data/kiranamate.db.pre-restore-${backupTimestamp}`);
+      const safetyBackupPath = path.resolve(path.dirname(dbPath), `kiranamate.db.pre-restore-${backupTimestamp}`);
       fs.copyFileSync(dbPath, safetyBackupPath);
     }
 

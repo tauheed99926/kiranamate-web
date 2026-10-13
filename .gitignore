@@ -10,19 +10,20 @@ build/
 
 # Environment files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # SQLite Database & Backups
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.pre-restore-*
 server/data/*.db
-server/data/*.db-journal
-server/data/*.db-wal
-server/data/*.db-shm
-server/data/*.pre-restore-*
+server/prisma/data/*.db
 server/data/uploads/*
 !server/data/.gitkeep
+!server/prisma/data/.gitkeep
 
 # Logs & Debug
 npm-debug.log*
